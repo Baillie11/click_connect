@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1013290130046",
+    "project_id": "clickconnect-dec54",
+    "storage_bucket": "clickconnect-dec54.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1013290130046:android:41be5e95158c2c7001162f",
+        "android_client_info": {
+          "package_name": "com.example.click_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChiyySWWQMB8eABpgIUOPa5Ts3-Mha-T4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
