@@ -1,6 +1,10 @@
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:io';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'welcome_page.dart';
 
 class ProfileSetupPage extends StatefulWidget {
@@ -15,6 +19,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final _nicknameController = TextEditingController();
   final _locationController = TextEditingController();
   final _dobController = TextEditingController();
+  File? _imageFile;
+  String? _imageUrl;
 
   String? _selectedSex;
   List<String> _selectedLookingFor = [];
@@ -46,25 +52,55 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     'Fetish'
   ];
 
-  Future<void> _submitProfile() async {
-    print('🔄 Submit button pressed');
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingProfile();
+  }
 
-    if (!_formKey.currentState!.validate()) {
-      print('❌ Form validation failed');
-      return;
+  Future<void> _loadExistingProfile() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final data = doc.data();
+    if (data == null) return;
+
+    setState(() {
+      _nicknameController.text = data['nickname'] ?? '';
+      _locationController.text = data['location'] ?? '';
+      _dobController.text = data['dateOfBirth'] ?? '';
+      _selectedSex = data['sex'];
+      _selectedLookingFor = List<String>.from(data['lookingFor'] ?? []);
+      _selectedInterests = List<String>.from(data['interests'] ?? []);
+      _imageUrl = data['profileImageUrl'];
+    });
+  }
+
+  Future<void> _pickImage() async {
+    final pickedFile = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (pickedFile != null) {
+      setState(() {
+        _imageFile = File(pickedFile.path);
+      });
     }
+  }
+
+  Future<String?> _uploadImage(String uid) async {
+    if (_imageFile == null) return _imageUrl;
+
+    final ref = FirebaseStorage.instance.ref().child('user_images/$uid/profile.jpg');
+    await ref.putFile(_imageFile!);
+    return await ref.getDownloadURL();
+  }
+
+  Future<void> _submitProfile() async {
+    if (!_formKey.currentState!.validate()) return;
 
     final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-    if (user == null) {
-      print('❌ No user found. Are you logged in?');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be logged in to save your profile')),
-      );
-      return;
-    }
-
-    print('✅ User UID: ${user.uid}');
+    final imageUrl = await _uploadImage(user.uid);
 
     final profileData = {
       'uid': user.uid,
@@ -75,27 +111,19 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       'location': _locationController.text.trim(),
       'lookingFor': _selectedLookingFor,
       'interests': _selectedInterests,
+      'profileImageUrl': imageUrl,
       'profileComplete': true,
     };
 
-    try {
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .set(profileData, SetOptions(merge: true));
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .set(profileData, SetOptions(merge: true));
 
-      print('✅ Profile data saved to Firestore');
-
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const WelcomePage()),
-        );
-      }
-    } catch (e) {
-      print('🔥 Firestore save error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error saving profile')),
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const WelcomePage()),
       );
     }
   }
@@ -138,6 +166,19 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           key: _formKey,
           child: Column(
             children: [
+              GestureDetector(
+                onTap: _pickImage,
+                child: CircleAvatar(
+                  radius: 60,
+                  backgroundImage: _imageFile != null
+                      ? FileImage(_imageFile!)
+                      : (_imageUrl != null ? NetworkImage(_imageUrl!) : null) as ImageProvider?,
+                  child: _imageFile == null && _imageUrl == null
+                      ? const Icon(Icons.add_a_photo, size: 40)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _nicknameController,
                 decoration: const InputDecoration(labelText: 'Nickname'),
